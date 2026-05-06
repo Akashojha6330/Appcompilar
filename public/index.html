@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AppCompiler — NL to App Schema</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#08090d;--surface:#0f1117;--surface2:#161920;--surface3:#1d2129;
+  --border:#252830;--border2:#2e333d;
+  --accent:#7c6df0;--accent2:#5b4fd4;--accent-glow:rgba(124,109,240,0.12);
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--blue:#38bdf8;--pink:#f472b6;
+  --text:#dde1eb;--text2:#8892a4;--text3:#4a5166;
+  --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans)}
+.app{display:grid;grid-template-rows:auto auto auto 1fr auto;min-height:100vh;max-width:1200px;margin:0 auto;padding:28px 24px;gap:20px}
+
+/* HEADER */
+header{display:flex;align-items:center;gap:14px}
+.logo-box{width:44px;height:44px;background:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:16px;color:#fff;flex-shrink:0}
+.logo-title{font-size:1.25rem;font-weight:800;letter-spacing:-0.5px}
+.logo-desc{font-size:0.68rem;color:var(--text3);font-family:var(--mono);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
+.header-pills{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.pill{background:var(--surface2);border:1px solid var(--border2);padding:5px 12px;border-radius:20px;font-size:0.68rem;font-family:var(--mono);color:var(--text2)}
+
+/* INPUT */
+.input-card{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:22px}
+.input-label{font-size:0.65rem;font-family:var(--mono);color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
+textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-family:var(--mono);font-size:0.82rem;color:var(--text);resize:vertical;min-height:88px;outline:none;transition:border 0.2s;line-height:1.7;caret-color:var(--accent)}
+textarea:focus{border-color:var(--accent)}
+textarea::placeholder{color:var(--text3)}
+.input-actions{display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:10px}
+.examples{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ex-label{font-size:0.65rem;color:var(--text3);font-family:var(--mono)}
+.ex-btn{background:transparent;border:1px solid var(--border2);padding:5px 11px;border-radius:6px;font-size:0.68rem;font-family:var(--mono);color:var(--text2);cursor:pointer;transition:all 0.15s}
+.ex-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
+.compile-btn{background:var(--accent);border:none;padding:11px 30px;border-radius:8px;font-family:var(--sans);font-weight:700;font-size:0.88rem;color:#fff;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:8px;letter-spacing:0.3px}
+.compile-btn:hover:not(:disabled){background:var(--accent2);transform:translateY(-1px);box-shadow:0 8px 20px rgba(124,109,240,0.3)}
+.compile-btn:disabled{opacity:0.45;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* PIPELINE */
+.pipeline{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+@media(max-width:700px){.pipeline{grid-template-columns:repeat(2,1fr)}}
+.stage{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;transition:all 0.3s}
+.stage.active{border-color:var(--accent);background:var(--accent-glow)}
+.stage.done{border-color:rgba(34,197,94,0.4);background:rgba(34,197,94,0.05)}
+.stage.error{border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.05)}
+.stage-num{font-size:0.6rem;font-family:var(--mono);color:var(--text3);letter-spacing:1.5px;margin-bottom:6px}
+.stage-name{font-size:0.82rem;font-weight:700;margin-bottom:8px;line-height:1.3}
+.stage-status{display:flex;align-items:center;gap:6px;font-size:0.65rem;font-family:var(--mono);color:var(--text2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--border2);flex-shrink:0;transition:background 0.3s}
+.dot.pulse{background:var(--accent);animation:pulse 1s ease-in-out infinite}
+.dot.done{background:var(--green)}
+.dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.8)}}
+.stage-ms{font-size:0.6rem;color:var(--text3);font-family:var(--mono);margin-top:4px}
+
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:600px){.metrics{grid-template-columns:repeat(2,1fr)}}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.metric-val{font-size:1.6rem;font-weight:800;font-family:var(--mono);line-height:1;margin-bottom:6px}
+.metric-label{font-size:0.62rem;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono)}
+
+/* OUTPUT */
+.output-area{background:var(--surface);border:1px solid var(--border2);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.tabs-row{display:flex;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+.tabs-row::-webkit-scrollbar{height:3px}
+.tabs-row::-webkit-scrollbar-thumb{background:var(--border2)}
+.tab{padding:13px 18px;font-size:0.72rem;font-family:var(--mono);color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all 0.15s;user-select:none}
+.tab:hover{color:var(--text2)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-body{padding:22px;overflow-y:auto;max-height:500px;flex:1}
+.tab-body::-webkit-scrollbar{width:5px}
+.tab-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+pre{font-family:var(--mono);font-size:0.76rem;line-height:1.8;color:var(--text);white-space:pre-wrap;word-break:break-word}
+
+/* JSON syntax highlighting */
+.jk{color:#7c6df0}.jv{color:#22c55e}.js{color:#f59e0b}.jb{color:#38bdf8}.jn{color:#f472b6}
+
+/* Validation panel */
+.v-list{display:flex;flex-direction:column;gap:2px}
+.v-item{display:flex;align-items:flex-start;gap:12px;padding:12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border)}
+.v-icon{font-size:15px;flex-shrink:0;margin-top:1px}
+.v-content{flex:1;min-width:0}
+.v-field{font-size:0.78rem;font-weight:700;font-family:var(--mono);color:var(--text);margin-bottom:3px}
+.v-msg{font-size:0.72rem;color:var(--text2);font-family:var(--mono);line-height:1.5}
+.v-layer{display:inline-block;background:var(--surface3);border:1px solid var(--border2);padding:2px 7px;border-radius:4px;font-size:0.6rem;font-family:var(--mono);color:var(--text3);margin-bottom:4px}
+.repaired-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--amber);padding:2px 8px;border-radius:4px;font-size:0.6rem;font-family:var(--mono);margin-top:5px}
+.assumptions-box{background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.18);border-radius:10px;padding:16px;margin-top:16px}
+.assumptions-title{font-size:0.62rem;font-family:var(--mono);color:var(--blue);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px}
+.assumption-item{font-size:0.76rem;font-family:var(--mono);color:var(--blue);line-height:1.6;padding:3px 0}
+.assumption-item::before{content:'→ ';opacity:0.5}
+
+/* Exec panel */
+.exec-score-wrap{display:flex;align-items:center;gap:24px;margin-bottom:24px;flex-wrap:wrap}
+.exec-score-num{font-size:3.5rem;font-weight:800;font-family:var(--mono);line-height:1}
+.exec-grade{font-size:1.2rem;font-weight:700;font-family:var(--mono);padding:6px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text)}
+.score-bar{flex:1;min-width:160px}
+.score-bar-bg{height:10px;background:var(--surface2);border-radius:5px;overflow:hidden;margin-top:8px}
+.score-bar-fill{height:100%;border-radius:5px;transition:width 1.2s cubic-bezier(0.4,0,0.2,1)}
+.check-list{display:flex;flex-direction:column;gap:8px}
+.check-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:8px;background:var(--surface2)}
+.check-item.fail{border-left:3px solid var(--red)}
+.check-item.pass{border-left:3px solid var(--green)}
+.check-name{font-size:0.78rem;font-weight:700;font-family:var(--mono)}
+.check-detail{font-size:0.7rem;color:var(--text2);font-family:var(--mono);margin-top:2px}
+.critical-badge{display:inline-block;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:var(--red);padding:1px 6px;border-radius:3px;font-size:0.58rem;font-family:var(--mono);margin-left:6px}
+.runtime-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.runtime-tag{background:var(--surface2);border:1px solid var(--border2);padding:5px 12px;border-radius:6px;font-size:0.72rem;font-family:var(--mono);color:var(--text2)}
+.blockers-box{background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:10px;padding:14px;margin-top:16px}
+.blockers-title{font-size:0.6rem;font-family:var(--mono);color:var(--red);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px}
+.blocker-item{font-size:0.74rem;font-family:var(--mono);color:rgba(239,68,68,0.8);line-height:1.7}
+.blocker-item::before{content:'⚠ ';opacity:0.6}
+
+/* Empty state */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px 20px;gap:14px;text-align:center}
+.empty-hex{font-size:2.8rem;opacity:0.12;font-family:var(--mono)}
+.empty-txt{font-size:0.8rem;font-family:var(--mono);color:var(--text3);line-height:1.7}
+
+/* Status bar */
+.statusbar{display:flex;align-items:center;gap:10px;padding:10px 18px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:0.72rem;font-family:var(--mono);color:var(--text2)}
+.sdot{width:8px;height:8px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.sdot.running{background:var(--accent);animation:pulse 1s infinite}
+.sdot.success{background:var(--green)}
+.sdot.error{background:var(--red)}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,0.25);border-top-color:rgba(255,255,255,0.85);border-radius:50%;animation:spin 0.55s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.copy-btn{background:transparent;border:1px solid var(--border);padding:4px 10px;border-radius:5px;font-size:0.65rem;font-family:var(--mono);color:var(--text3);cursor:pointer;transition:all 0.15s;float:right;margin-bottom:8px}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-box">&lt;/&gt;</div>
+    <div>
+      <div class="logo-title">AppCompiler</div>
+      <div class="logo-desc">Natural Language → App Schema</div>
+    </div>
+    <div class="header-pills">
+      <div class="pill">5-stage pipeline</div>
+      <div class="pill">auto-repair</div>
+      <div class="pill" id="modelPill">claude-haiku-4-5</div>
+    </div>
+  </header>
+
+  <!-- Input -->
+  <div class="input-card">
+    <div class="input-label">// natural language prompt</div>
+    <textarea id="promptInput" rows="3" placeholder='e.g. "Build a CRM with login, contacts, dashboard, role-based access, and premium plan with payments. Admins see analytics, managers edit contacts, viewers read-only."'></textarea>
+    <div class="input-actions">
+      <div class="examples">
+        <span class="ex-label">try:</span>
+        <button class="ex-btn" onclick="setEx(0)">CRM + payments</button>
+        <button class="ex-btn" onclick="setEx(1)">project manager</button>
+        <button class="ex-btn" onclick="setEx(2)">e-learning</button>
+        <button class="ex-btn" onclick="setEx(3)">vague prompt</button>
+      </div>
+      <button class="compile-btn" id="compileBtn" onclick="compile()">
+        <span id="btnInner">▶ &nbsp;Compile</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Pipeline stages -->
+  <div class="pipeline" id="pipelineRow">
+    <div class="stage" id="s0">
+      <div class="stage-num">STAGE 01</div>
+      <div class="stage-name">Intent Extraction</div>
+      <div class="stage-status"><div class="dot" id="d0"></div><span id="st0">idle</span></div>
+      <div class="stage-ms" id="ms0"></div>
+    </div>
+    <div class="stage" id="s1">
+      <div class="stage-num">STAGE 02</div>
+      <div class="stage-name">System Design</div>
+      <div class="stage-status"><div class="dot" id="d1"></div><span id="st1">waiting</span></div>
+      <div class="stage-ms" id="ms1"></div>
+    </div>
+    <div class="stage" id="s2">
+      <div class="stage-num">STAGE 03</div>
+      <div class="stage-name">Schema Generation</div>
+      <div class="stage-status"><div class="dot" id="d2"></div><span id="st2">waiting</span></div>
+      <div class="stage-ms" id="ms2"></div>
+    </div>
+    <div class="stage" id="s3">
+      <div class="stage-num">STAGE 04</div>
+      <div class="stage-name">Validation + Repair</div>
+      <div class="stage-status"><div class="dot" id="d3"></div><span id="st3">waiting</span></div>
+      <div class="stage-ms" id="ms3"></div>
+    </div>
+    <div class="stage" id="s4">
+      <div class="stage-num">STAGE 05</div>
+      <div class="stage-name">Execution Check</div>
+      <div class="stage-status"><div class="dot" id="d4"></div><span id="st4">waiting</span></div>
+      <div class="stage-ms" id="ms4"></div>
+    </div>
+  </div>
+
+  <!-- Output -->
+  <div class="output-area" id="outputArea">
+    <div class="empty" id="emptyState">
+      <div class="empty-hex">{ }</div>
+      <div class="empty-txt">paste a product prompt above<br>and hit compile to run the pipeline</div>
+    </div>
+    <div id="mainOutput" style="display:none;display:flex;flex-direction:column;height:100%">
+      <div class="tabs-row" id="tabsRow">
+        <div class="tab active" data-tab="intent" onclick="switchTab(this,'intent')">intent</div>
+        <div class="tab" data-tab="design" onclick="switchTab(this,'design')">system design</div>
+        <div class="tab" data-tab="ui" onclick="switchTab(this,'ui')">ui schema</div>
+        <div class="tab" data-tab="api" onclick="switchTab(this,'api')">api schema</div>
+        <div class="tab" data-tab="db" onclick="switchTab(this,'db')">db schema</div>
+        <div class="tab" data-tab="auth" onclick="switchTab(this,'auth')">auth + roles</div>
+        <div class="tab" data-tab="validation" onclick="switchTab(this,'validation')">validation</div>
+        <div class="tab" data-tab="exec" onclick="switchTab(this,'exec')">exec check</div>
+      </div>
+      <div class="tab-body" id="tabBody"></div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="statusbar">
+    <div class="sdot" id="sdot"></div>
+    <span id="statusMsg">ready — enter a prompt and compile</span>
+    <span style="margin-left:auto;color:var(--text3)" id="callCount"></span>
+  </div>
+
+</div>
+<script>
+const EXAMPLES = [
+  `Build a CRM with login, contacts, dashboard, role-based access, and premium plan with payments. Admins can see analytics, managers can edit contacts, viewers are read-only.`,
+  `I need a project management tool like Trello. Users create boards, lists, and cards. Team members can be invited. There should be due dates, labels, and activity logs. Free and Pro tiers.`,
+  `Build an e-learning platform. Instructors upload courses with video lessons and quizzes. Students enroll and track progress. Premium tier unlocks advanced courses. Certificates on completion.`,
+  `make an app`
+];
+function setEx(i){ document.getElementById('promptInput').value = EXAMPLES[i]; }
+
+let pipeline = null;
+let activeTab = 'intent';
+
+function setStage(i, state, text, ms){
+  document.getElementById('s'+i).className = 'stage ' + (state||'');
+  const d = document.getElementById('d'+i);
+  d.className = 'dot ' + (state==='active'?'pulse':state==='done'?'done':state==='error'?'error':'');
+  document.getElementById('st'+i).textContent = text;
+  if(ms) document.getElementById('ms'+i).textContent = ms + 'ms';
+}
+function setStatus(state, msg){
+  document.getElementById('sdot').className = 'sdot ' + (state||'');
+  document.getElementById('statusMsg').textContent = msg;
+}
+
+function syntaxHL(json){
+  const s = JSON.stringify(json, null, 2);
+  return s
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"([^"]+)":/g,'<span class="jk">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span class="js">"$1"</span>')
+    .replace(/: (true|false)/g,': <span class="jb">$1</span>')
+    .replace(/: (\d+\.?\d*)/g,': <span class="jn">$1</span>')
+    .replace(/: null/g,': <span class="jv">null</span>');
+}
+
+function renderTab(tabId){
+  const body = document.getElementById('tabBody');
+  if(!pipeline) return;
+  const p = pipeline;
+
+  if(tabId === 'validation'){
+    const v = p.validation || {};
+    const issues = v.issues || [];
+    let html = '';
+    if(issues.length === 0){
+      html = '<div style="color:var(--green);font-family:var(--mono);font-size:0.82rem;padding:10px">✅ All cross-layer validations passed.</div>';
+    } else {
+      html = '<div class="v-list">';
+      issues.forEach(issue => {
+        const icon = issue.repaired ? '🔧' : issue.severity==='error' ? '❌' : issue.severity==='fixed' ? '✅' : '⚠️';
+        html += `<div class="v-item">
+          <div class="v-icon">${icon}</div>
+          <div class="v-content">
+            <div class="v-layer">${issue.layer||'general'}</div>
+            <div class="v-field">${issue.field||''}</div>
+            <div class="v-msg">${issue.message||''}</div>
+            ${issue.repaired ? `<div class="repaired-tag">⚙ auto-repaired${issue.repair_action ? ': '+issue.repair_action : ''}</div>` : ''}
+          </div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    if(v.assumptions && v.assumptions.length){
+      html += `<div class="assumptions-box">
+        <div class="assumptions-title">assumptions made</div>
+        ${v.assumptions.map(a=>`<div class="assumption-item">${a}</div>`).join('')}
+      </div>`;
+    }
+    body.innerHTML = html;
+    return;
+  }
+
+  if(tabId === 'exec'){
+    const e = p.exec || {};
+    const score = e.score || 0;
+    const color = score>=80?'var(--green)':score>=50?'var(--amber)':'var(--red)';
+    let html = `<div class="exec-score-wrap">
+      <div class="exec-score-num" style="color:${color}">${score}</div>
+      <div class="exec-grade">${e.grade||'?'}</div>
+      <div class="score-bar">
+        <div style="font-size:0.68rem;font-family:var(--mono);color:var(--text3)">execution readiness score</div>
+        <div class="score-bar-bg"><div class="score-bar-fill" style="width:${score}%;background:${color}"></div></div>
+      </div>
+    </div>`;
+    if(e.checks){
+      html += '<div class="check-list">';
+      e.checks.forEach(c => {
+        html += `<div class="check-item ${c.pass?'pass':'fail'}">
+          <div style="font-size:14px;flex-shrink:0">${c.pass?'✅':'❌'}</div>
+          <div>
+            <div class="check-name">${c.name}${c.critical && !c.pass ? '<span class="critical-badge">critical</span>' : ''}</div>
+            <div class="check-detail">${c.detail}</div>
+          </div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    if(e.runtime_targets && e.runtime_targets.length){
+      html += '<div style="font-size:0.65rem;font-family:var(--mono);color:var(--text3);margin-top:16px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">suggested runtimes</div>';
+      html += '<div class="runtime-tags">' + e.runtime_targets.map(r=>`<div class="runtime-tag">${r}</div>`).join('') + '</div>';
+    }
+    if(e.blockers && e.blockers.length){
+      html += `<div class="blockers-box"><div class="blockers-title">blockers</div>${e.blockers.map(b=>`<div class="blocker-item">${b}</div>`).join('')}</div>`;
+    }
+    body.innerHTML = html;
+    return;
+  }
+
+  const dataMap = {
+    intent: p.intent,
+    design: p.design,
+    ui: p.ui,
+    api: p.api,
+    db: p.db,
+    auth: p.auth
+  };
+  const data = dataMap[tabId];
+  if(!data){ body.innerHTML = '<div style="color:var(--text3);font-family:var(--mono);font-size:0.78rem">// not yet generated</div>'; return; }
+  body.innerHTML = `<button class="copy-btn" onclick="copyTab('${tabId}')">copy JSON</button><pre>${syntaxHL(data)}</pre>`;
+}
+
+function copyTab(tabId){
+  const dataMap = { intent: pipeline?.intent, design: pipeline?.design, ui: pipeline?.ui, api: pipeline?.api, db: pipeline?.db, auth: pipeline?.auth, validation: pipeline?.validation, exec: pipeline?.exec };
+  const d = dataMap[tabId];
+  if(d) navigator.clipboard.writeText(JSON.stringify(d, null, 2)).then(()=>{ const btn=document.querySelector('.copy-btn'); if(btn){btn.textContent='copied!'; setTimeout(()=>btn.textContent='copy JSON',1500); }});
+}
+
+function switchTab(el, tabId){
+  activeTab = tabId;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderTab(tabId);
+}
+
+async function compile(){
+  const prompt = document.getElementById('promptInput').value.trim();
+  if(!prompt){ document.getElementById('promptInput').focus(); return; }
+
+  document.getElementById('compileBtn').disabled = true;
+  document.getElementById('btnInner').innerHTML = '<span class="spinner"></span>&nbsp; Compiling...';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('mainOutput').style.display = 'none';
+  pipeline = null;
+
+  for(let i=0;i<5;i++) setStage(i,'','waiting','');
+  setStage(0,'active','running...','');
+  setStatus('running','pipeline started — stage 1: intent extraction...');
+  document.getElementById('callCount').textContent = '';
+
+  // Update stage statuses based on SSE or polling
+  // We'll use a simple approach: poll or use one call with stage updates via fetch
+
+  try {
+    // Show stage progression with timing hints
+    const stageTimer = setInterval(() => {}, 100);
+
+    const resp = await fetch('/api/compile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+
+    clearInterval(stageTimer);
+
+    if(!resp.ok){
+      const err = await resp.json();
+      throw new Error(err.error || 'Server error');
+    }
+
+    const result = await resp.json();
+    if(!result.success) throw new Error(result.error);
+
+    pipeline = result.pipeline;
+
+    // Animate stage completions
+    const stages = result.pipeline.stages || [];
+    for(const stage of stages){
+      const i = stage.id - 1;
+      setStage(i, 'done', `done ✓`, stage.ms);
+    }
+
+    // Show metrics
+    const m = result.pipeline.metrics;
+    showMetrics(m);
+
+    // Show output
+    document.getElementById('mainOutput').style.display = 'flex';
+    renderTab(activeTab);
+
+    setStatus('success', `compiled in ${(m.total_ms/1000).toFixed(1)}s — ${m.tables} tables · ${m.endpoints} endpoints · ${m.pages} pages · score: ${m.exec_score}%`);
+    document.getElementById('callCount').textContent = `${m.llm_calls} LLM calls · ${m.total_retries} retries`;
+
+  } catch(err){
+    for(let i=0;i<5;i++){ if(document.getElementById('d'+i).className.includes('pulse')) setStage(i,'error','failed',''); }
+    setStatus('error', 'pipeline error: ' + err.message);
+    document.getElementById('emptyState').style.display = 'flex';
+  }
+
+  document.getElementById('compileBtn').disabled = false;
+  document.getElementById('btnInner').textContent = '▶  Compile';
+}
+
+let metricsShown = false;
+function showMetrics(m){
+  if(!metricsShown){
+    const div = document.createElement('div');
+    div.className = 'metrics';
+    div.id = 'metricsRow';
+    div.innerHTML = `
+      <div class="metric"><div class="metric-val" style="color:var(--accent)">${(m.total_ms/1000).toFixed(1)}s</div><div class="metric-label">total latency</div></div>
+      <div class="metric"><div class="metric-val" style="color:var(--amber)">${m.total_retries}</div><div class="metric-label">repair retries</div></div>
+      <div class="metric"><div class="metric-val" style="color:var(--green)">${m.issues_fixed}</div><div class="metric-label">issues fixed</div></div>
+      <div class="metric"><div class="metric-val" style="color:var(--blue)">${m.exec_score}%</div><div class="metric-label">exec readiness</div></div>
+    `;
+    document.getElementById('outputArea').before(div);
+    metricsShown = true;
+  } else {
+    const r = document.getElementById('metricsRow');
+    if(r) r.querySelectorAll('.metric-val')[0].textContent = (m.total_ms/1000).toFixed(1)+'s',
+           r.querySelectorAll('.metric-val')[1].textContent = m.total_retries,
+           r.querySelectorAll('.metric-val')[2].textContent = m.issues_fixed,
+           r.querySelectorAll('.metric-val')[3].textContent = m.exec_score+'%';
+  }
+}
+</script>
+</body>
+</html>

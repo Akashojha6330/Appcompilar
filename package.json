@@ -1,0 +1,16 @@
+{
+  "name": "app-compiler",
+  "version": "1.0.0",
+  "description": "NL to App Schema Compiler — Multi-stage LLM pipeline",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "@anthropic-ai/sdk": "^0.24.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  }
+}
